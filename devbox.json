@@ -1,6 +1,7 @@
 {
   "packages": [
-    "gradle"
+    "gradle",
+    "libreoffice"
   ],
   "shell": {
     "init_hook": null
