@@ -4,9 +4,12 @@ import java.io.IOException;
 import java.io.FileNotFoundException;
 import java.util.stream.Collectors;
 import java.nio.file.Path;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.StringWriter;
+import java.util.UUID;
 
+// Spring Framework
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -22,20 +25,31 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.MvcUriComponentsBuilder;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+// Apache Tika
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.sax.BodyContentHandler;
 import org.apache.tika.sax.ToHTMLContentHandler;
 import org.apache.tika.metadata.Metadata;
 
+// JodConverter
+import org.jodconverter.core.DocumentConverter;
+import org.jodconverter.core.office.OfficeException;
+import org.jodconverter.core.office.OfficeManager;
+import org.jodconverter.local.LocalConverter;
+import org.jodconverter.local.office.LocalOfficeManager;
 
 import com.example.uploadingfiles.storage.StorageFileNotFoundException;
 import com.example.uploadingfiles.storage.StorageService;
+
+import com.example.general.logger.SimpleLogger;
 
 @Controller
 public class FileUploadController {
 
 	private final StorageService storageService;
+	private final SimpleLogger logger = new SimpleLogger();
 
 	@Autowired
 	public FileUploadController(StorageService storageService) {
@@ -46,9 +60,9 @@ public class FileUploadController {
 	public String listUploadedFiles(Model model) throws IOException {
 
 		model.addAttribute("files", storageService.loadAll().map(
-				path -> MvcUriComponentsBuilder.fromMethodName(FileUploadController.class,
-						"serveFile", path.getFileName().toString()).build().toUri().toString())
-				.collect(Collectors.toList()));
+			path -> MvcUriComponentsBuilder.fromMethodName(FileUploadController.class,
+					"serveFile", path.getFileName().toString()).build().toUri().toString())
+			.collect(Collectors.toList()));
 
 		return "uploadForm";
 	}
@@ -85,6 +99,49 @@ public class FileUploadController {
 
 		model.addAttribute("text", text);
 		return text;
+	}
+
+	/*
+	 * PDF プレビューサンプル
+	 *
+	 * [require]: libreoffice インストール
+	 * [back]   : PDF を作成
+	 * [back]   : ファイル URL/ファイル名を送信する
+	 * [front]  : PDF.js でプレビュー表示
+	 * [front]  : プレビュー閉じたら PDF ファイルを削除
+	 */
+	@GetMapping("/files/preview/{filename:.+}")
+	@ResponseBody
+	public String makePDF(@PathVariable String filename) {
+		try {
+			Path inputFilePath = storageService.load(filename);
+			logger.printLog(SimpleLogger.LOG_LEVEL.DEBUG, inputFilePath.toString());
+			File inputFile = inputFilePath.toFile();
+
+			UUID uuid = UUID.randomUUID();
+			String outputFileName = "preview-" + uuid.toString() + ".pdf";
+			String outputFilePathString = inputFilePath
+				.toAbsolutePath().toString()
+				.replace(inputFilePath.getFileName().toString(), outputFileName);
+			File outputFile = new File(outputFilePathString);
+
+			logger.printLog(SimpleLogger.LOG_LEVEL.INFO, "Convert start.");
+			OfficeManager officeManager = LocalOfficeManager.make();
+			DocumentConverter converter = LocalConverter.make(officeManager);
+
+			officeManager.start();
+			converter.convert(inputFile).to(outputFile).execute();
+			officeManager.stop();
+			logger.printLog(SimpleLogger.LOG_LEVEL.INFO, "Convert end.");
+
+			String outputURL = MvcUriComponentsBuilder.fromMethodName(FileUploadController.class,
+				"serveFile", outputFileName).build().toUri().toString();
+			return "{\n\"result\": \"ok\",\n\"url\": \"" + outputURL + "\"\n}";
+		} catch (Exception e) {
+			logger.printLog(SimpleLogger.LOG_LEVEL.ERROR, e.toString());
+		}
+
+		return "{\n\"result\": \"ng\"\n}";
 	}
 
 	@PostMapping("/")

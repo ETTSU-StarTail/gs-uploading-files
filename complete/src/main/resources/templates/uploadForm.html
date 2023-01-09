@@ -24,8 +24,42 @@
         <li th:each="file : ${files}">
           <a th:href="${file}" th:text="${file}"></a>
           <a th:href="${file.replace('files', 'files/get/text')}">Text Load</a>
+          <button
+            type="button"
+            name="show-preview"
+            th:data-url="${file.replace('files', 'files/preview')}">
+            Show Preview
+          </button>
         </li>
       </ul>
     </div>
+
+    <div class="canvas-control">
+      <dl>
+        <dt>page</dt>
+        <dd>
+          <span id="canvas-control__text-page-num"></span>
+          /
+          <span id="canvas-control__text-page-count"></span>
+        </dd>
+        <dt>status</dt>
+        <dd>
+          <span id="canvas-control__text-indicator">ready</span>
+        </dd>
+        <dt>control</dt>
+        <dd>
+          <button type="button" id="canvas-control__button-previous-page">
+            previous
+          </button>
+          <button type="button" id="canvas-control__button-next-page">
+            next
+          </button>
+        </dd>
+      </dl>
+    </div>
+    <canvas id="canvas-preview"></canvas>
+
+    <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
+    <script th:src="@{/js/pdf-preview.js}"></script>
   </body>
 </html>
